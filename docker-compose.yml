@@ -1,0 +1,66 @@
+version: "3"
+
+services:
+  pdns-admin:
+    image: powerdnsadmin/pda-legacy:latest
+    container_name: powerdns_admin
+    restart: unless-stopped
+    volumes:
+      - ./admin-data:/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    ports:
+      - "9191:9191"
+    environment:
+      - DD_SERVICE=powerdns-admin
+      - BIND_ADDRESS=0.0.0.0:9191
+      - SECRET_KEY=<random-value>
+      - SQLALCHEMY_DATABASE_URI=postgresql://pdns:<your-pg-pass>@postgres/pda
+      - GUNICORN_TIMEOUT=60
+      - GUNICORN_WORKERS=2
+    depends_on:
+      - postgres
+
+  pdns:
+    image: monogramm/docker-powerdns:4.3.0
+    hostname: pdns-server
+    container_name: pdns-server
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pdns_control", "rping"]
+      interval: 30s
+      retries: 3
+    ports:
+      - "5053:53"
+      - "5053:53/udp"
+    depends_on:
+      - postgres
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    environment:
+      - AUTOCONF=postgres
+      - PGSQL_HOST=postgres
+      - PGSQL_PORT=5432
+      - PGSQL_DB=pdns
+      - PGSQL_USER=pdns
+      - PGSQL_PASS=<your-pg-pass>
+      - PGSQL_DNSSEC=no
+      - PDNS_API=yes
+      - PDNS_API_KEY=<your-api-key>
+      - PDNS_WEBSERVER_ADDRESS=0.0.0.0
+      - PDNS_WEBSERVER_PORT=8081
+      - PDNS_WEBSERVER_ALLOW_FROM=0.0.0.0/0
+      - PDNS_SOA_REFRESH_DEFAULT=14400
+
+  postgres:
+    image: postgres:10-alpine
+    restart: unless-stopped
+    volumes:
+      - ./postgresql:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    environment:
+      - POSTGRES_DB=pda
+      - POSTGRES_USER=pdns
+      - POSTGRES_PASSWORD=<your-pg-pass>
